@@ -26,7 +26,7 @@ class Label(IntEnum):
 
 
 GCP_KEY_PATH = Path.home().joinpath(".gripable-dev-pipes-keys").joinpath("gripable-calib-key.json")
-#IMAGE_SIZE = (96, 54)
+# IMAGE_SIZE = (96, 54)
 IMAGE_SIZE = (64, 64)
 
 
@@ -35,6 +35,8 @@ class SubSet(Enum):
 
 
 class QrData(Dataset):
+    probs = None
+
     def __init__(self, subset: SubSet, cache_dir=Path.home().joinpath(".qr_dataset"), transform=None,
                  target_transform=None, force_reload=True):
 
@@ -71,10 +73,12 @@ class QrData(Dataset):
         else:
             self.blobs = pd.read_csv(df_cache_path, index_col=0)
 
-        probs = np.random.rand(len(self.blobs))
-        training_mask = probs < 0.7
-        test_mask = (probs >= 0.7) & (probs < 0.85)
-        validatoin_mask = probs >= 0.85
+        # only split the data into train, test, valid subsets once
+        if self.probs is None or len(self.blobs) != len(self.probs):
+            self.probs = np.random.rand(len(self.blobs))
+        training_mask = self.probs < 0.7
+        test_mask = (self.probs >= 0.7) & (self.probs < 0.85)
+        validatoin_mask = self.probs >= 0.85
 
         if subset == SubSet.TRAIN:
             self.blobs = self.blobs[training_mask]
@@ -98,16 +102,16 @@ class QrData(Dataset):
                 os.makedirs(cache_path.parent)
             self.bucket.blob(blob_name).download_to_filename(cache_path)
             print(f"downloading {blob_name}")
-        #image_cv = cv2.imread(str(cache_path))
-        #image_tensor = tensor(np.swapaxes(crop_image(image_cv),0,2))
-        #a,b,c,d = crop_image(str(cache_path))
+        # image_cv = cv2.imread(str(cache_path))
+        # image_tensor = tensor(np.swapaxes(crop_image(image_cv),0,2))
+        # a,b,c,d = crop_image(str(cache_path))
         image_tensor = read_image(str(cache_path))
         """
         plt.figure(1)
         plt.clf()
         show_data([self.transform(image_tensor), label])
         """
-        #image_tensor = image_tensor[:,a:b,c:d]
+        # image_tensor = image_tensor[:,a:b,c:d]
         """
         plt.figure(2)
         plt.clf()
@@ -141,4 +145,3 @@ if __name__ == "__main__":
     data = QrData(SubSet.TRAIN, transform=ct)
     ind = random.randint(0, len(data))
     img, label = sample = data[ind]
-
