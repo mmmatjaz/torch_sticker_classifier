@@ -3,15 +3,19 @@ import os
 import random
 from enum import Enum, IntEnum
 
+import cv2
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from torch import tensor
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 from google.cloud import storage
 from pathlib import Path
 
 from torchvision.transforms import transforms
+
+from crop_to_qr import crop_image
 
 
 class Label(IntEnum):
@@ -22,7 +26,8 @@ class Label(IntEnum):
 
 
 GCP_KEY_PATH = Path.home().joinpath(".gripable-dev-pipes-keys").joinpath("gripable-calib-key.json")
-IMAGE_SIZE = (96, 54)
+#IMAGE_SIZE = (96, 54)
+IMAGE_SIZE = (64, 64)
 
 
 class SubSet(Enum):
@@ -54,7 +59,7 @@ class QrData(Dataset):
                     bb = b.name.split("/")[1]
                     if bb not in ignore:
                         blobs.append((b.name, lbl))
-                        #print(bb)
+                        # print(bb)
             """
             for b in bucket.list_blobs(prefix="qr-device"):
                 bb = b.name.split("/")[1]
@@ -93,12 +98,30 @@ class QrData(Dataset):
                 os.makedirs(cache_path.parent)
             self.bucket.blob(blob_name).download_to_filename(cache_path)
             print(f"downloading {blob_name}")
-        image = read_image(str(cache_path))
-        if self.transform:
-            image = self.transform(image)
+        #image_cv = cv2.imread(str(cache_path))
+        #image_tensor = tensor(np.swapaxes(crop_image(image_cv),0,2))
+        #a,b,c,d = crop_image(str(cache_path))
+        image_tensor = read_image(str(cache_path))
+        """
+        plt.figure(1)
+        plt.clf()
+        show_data([self.transform(image_tensor), label])
+        """
+        #image_tensor = image_tensor[:,a:b,c:d]
+        """
+        plt.figure(2)
+        plt.clf()
+        show_data([self.transform(image_tensor), label])
+        """
+        try:
+            if self.transform:
+                image_tensor = self.transform(image_tensor)
+        except ValueError as e:
+            print(cache_path)
+            raise e
         if self.target_transform:
             label = self.target_transform(label)
-        return image, label
+        return image_tensor, label
 
 
 def show_data(data_sample):
@@ -112,6 +135,10 @@ composed_transform = transforms.Compose([transforms.ToPILImage(),
                                          ])  # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
 
 if __name__ == "__main__":
-    data = QrData(SubSet.TRAIN, transform=composed_transform)
-    img, label = sample = data[random.randint(0, len(data))]
-    show_data(sample)
+    ct = transforms.Compose([transforms.ToPILImage(),
+                             transforms.ToTensor(),
+                             ])  # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    data = QrData(SubSet.TRAIN, transform=ct)
+    ind = random.randint(0, len(data))
+    img, label = sample = data[ind]
+
