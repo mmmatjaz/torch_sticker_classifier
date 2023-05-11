@@ -24,4 +24,4 @@ class CifarNet(nn.Module):
 
     @classmethod
     def pth_fname(cls):
-        return './cifar_net.pth'
+        return 'cache/cifar_net.pth'

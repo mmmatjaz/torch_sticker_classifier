@@ -3,11 +3,8 @@ import os
 import random
 from enum import Enum, IntEnum
 
-import cv2
 import numpy as np
 import pandas as pd
-from matplotlib import pyplot as plt
-from torch import tensor
 from torch.utils.data import Dataset
 from torchvision.io import read_image
 from google.cloud import storage
@@ -16,6 +13,7 @@ from pathlib import Path
 from torchvision.transforms import transforms
 
 from crop_to_qr import crop_image
+from qr_torch.helpers import show_data
 
 
 class Label(IntEnum):
@@ -38,11 +36,11 @@ class QrData(Dataset):
     probs = None
 
     def __init__(self, subset: SubSet, cache_dir=Path.home().joinpath(".qr_dataset"), transform=None,
-                 target_transform=None, force_reload=True):
-
+                 target_transform=None, force_reload=True, auto_crop=True):
+        self.crop=auto_crop
         # build list of ignore data
         ignore = []
-        for txt in glob.glob("*.txt"):
+        for txt in glob.glob("data_ignore/*.txt"):
             with open(txt, 'r') as ftxt:
                 ignore += [l.strip() for l in ftxt.readlines()]
 
@@ -73,18 +71,18 @@ class QrData(Dataset):
         else:
             self.blobs = pd.read_csv(df_cache_path, index_col=0)
 
-        # only split the data into train, test, valid subsets once
+        # only split the dataset (into train, test, valid subsets) once
         if self.probs is None or len(self.blobs) != len(self.probs):
             self.probs = np.random.rand(len(self.blobs))
-        training_mask = self.probs < 0.7
-        test_mask = (self.probs >= 0.7) & (self.probs < 0.85)
-        validatoin_mask = self.probs >= 0.85
 
         if subset == SubSet.TRAIN:
+            training_mask = self.probs < 0.7
             self.blobs = self.blobs[training_mask]
         elif subset == SubSet.TEST:
+            test_mask = (self.probs >= 0.7) & (self.probs < 0.85)
             self.blobs = self.blobs[test_mask]
         else:
+            validatoin_mask = self.probs >= 0.85
             self.blobs = self.blobs[validatoin_mask]
 
         self.transform = transform
@@ -102,21 +100,12 @@ class QrData(Dataset):
                 os.makedirs(cache_path.parent)
             self.bucket.blob(blob_name).download_to_filename(cache_path)
             print(f"downloading {blob_name}")
-        # image_cv = cv2.imread(str(cache_path))
-        # image_tensor = tensor(np.swapaxes(crop_image(image_cv),0,2))
-        # a,b,c,d = crop_image(str(cache_path))
+
         image_tensor = read_image(str(cache_path))
-        """
-        plt.figure(1)
-        plt.clf()
-        show_data([self.transform(image_tensor), label])
-        """
-        # image_tensor = image_tensor[:,a:b,c:d]
-        """
-        plt.figure(2)
-        plt.clf()
-        show_data([self.transform(image_tensor), label])
-        """
+        if self.crop:
+            a, b, c, d = crop_image(str(cache_path))
+            image_tensor = image_tensor[:, a:b, c:d]
+
         try:
             if self.transform:
                 image_tensor = self.transform(image_tensor)
@@ -126,11 +115,6 @@ class QrData(Dataset):
         if self.target_transform:
             label = self.target_transform(label)
         return image_tensor, label
-
-
-def show_data(data_sample):
-    plt.imshow(np.swapaxes(data_sample[0].numpy(), 0, 2))
-    plt.title('y = ' + Label(data_sample[1]).name)
 
 
 composed_transform = transforms.Compose([transforms.ToPILImage(),
@@ -145,3 +129,4 @@ if __name__ == "__main__":
     data = QrData(SubSet.TRAIN, transform=ct)
     ind = random.randint(0, len(data))
     img, label = sample = data[ind]
+    show_data(sample)

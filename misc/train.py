@@ -7,7 +7,6 @@ import numpy as np
 
 
 class CNN(nn.Module):
-    # Contructor
     def __init__(self, out_1=16, out_2=32):
         super(CNN, self).__init__()
         self.cnn1 = nn.Conv2d(in_channels=1, out_channels=out_1, kernel_size=5, padding=2)
